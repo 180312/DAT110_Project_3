@@ -6,7 +6,7 @@ import no.hvl.dat110.rpc.ChordNodeContainer;
 public class Process10 {
 
 	public static void main(String[] args) throws Exception {
-		new ChordNodeContainer("process10", 70000, true);
+		new ChordNodeContainer("process10", 600000, true);
 
 	}
 

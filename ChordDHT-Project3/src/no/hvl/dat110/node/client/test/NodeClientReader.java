@@ -36,18 +36,26 @@ public class NodeClientReader extends Thread {
 		
 		// Lookup(key) - Use this class as a client that is requesting for a new file and needs the identifier and IP of the node where the file is located
 		// assume you have a list of nodes in the tracker class and select one randomly. We can use the Tracker class for this purpose
-
+		
 		
 		// connect to an active chord node - can use the process defined in StaticTracker 
 		
 		// Compute the hash of the node's IP address
-		
+		Registry registry = Util.tryIPs();
 		// use the hash to retrieve the ChordNodeInterface remote object from the registry
-		
+		String haship = Hash.hashOf(Util.activeIP).toString();
+		try {
+			ChordNodeInterface entryNode = (ChordNodeInterface) registry.lookup(haship);
+			FileManager fm = new FileManager(entryNode, StaticTracker.N);
+			this.succeed = fm.requestToReadFileFromAnyActiveNode(filename);
+		} catch (RemoteException | NotBoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		// do: FileManager fm = new FileManager(ChordNodeInterface, StaticTracker.N);
 		
 		// do: boolean succeed = fm.requestToReadFileFromAnyActiveNode(filename);
-	
+		
 	}
 	
 	public boolean isSucceed() {

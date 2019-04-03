@@ -14,7 +14,9 @@ import java.math.BigInteger;
 //import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.rmi.AccessException;
+import java.rmi.NotBoundException;
 import java.rmi.RemoteException;
+import java.rmi.registry.LocateRegistry;
 import java.rmi.registry.Registry;
 import java.rmi.server.UnicastRemoteObject;
 import java.util.ArrayList;
@@ -25,6 +27,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import no.hvl.dat110.rpc.StaticTracker;
 import no.hvl.dat110.rpc.interfaces.ChordNodeInterface;
 import no.hvl.dat110.util.Hash;
 import no.hvl.dat110.util.Util;
@@ -311,34 +314,70 @@ public class Node extends UnicastRemoteObject implements ChordNodeInterface {
 	private boolean multicastMessage(Message message) throws AccessException, RemoteException {
 		
 		// the same as MutexProcess - see MutexProcess
+		quorum = activenodesforfile.size()/2 + 1;
+		List<Message> activenodes = new ArrayList<Message>(this.activenodesforfile);
 		
-		return false;
+		synchronized(queueACK) {
+			queueACK.clear();
+			for(int i=0; i<activenodes.size(); i++) {
+				String stub = activenodes.get(i).getNodeID().toString();
+				Registry reg = LocateRegistry.getRegistry(activenodes.get(i).getNodeIP());
+				try {
+					ChordNodeInterface node = (ChordNodeInterface) reg.lookup(stub);
+					queueACK.add(node.onMessageReceived(message));
+				} catch (NotBoundException e) {
+					e.printStackTrace();
+				}
+				
+			}
+		}
+		return majorityAcknowledged();	
 	}
 	
 	@Override
 	public Message onMessageReceived(Message message) throws RemoteException {
 		
 		// increment the local clock
+		incrementclock();
 
-		// Hint: for all the 3 cases, use Message to send GRANT or DENY. e.g. message.setAcknowledgement(true) = GRANT
+		// Hint: for all 3 cases, use Message to send GRANT or DENY. e.g. message.setAcknowledgement(true) = GRANT
 		
 		/**
 		 *  case 1: Receiver is not accessing shared resource and does not want to: GRANT, acquirelock and reply
 		 */
-		
+		if(!CS_BUSY) {
+			acquireLock();
+			message.setAcknowledged(true);
+			return message;
+		}
 		
 		/**
 		 *  case 2: Receiver already has access to the resource: DENY and reply
 		 */
 		
+		if(CS_BUSY) {
+			message.setAcknowledged(false);
+			return message;
+		}
 		
 		/**
 		 *  case 3: Receiver wants to access resource but is yet to (compare own multicast message to received message
 		 *  the message with lower timestamp wins) - GRANT if received is lower, acquirelock and reply
-		 */		
+		 */	
+		
+		if(WANTS_TO_ENTER_CS) {
+			if(message.getClock()<counter) {
+				acquireLock();
+				message.setAcknowledged(true);
+				return message;
+			} else {
+				message.setAcknowledged(false);
+				return message;
+			}
+		}
 		
 		
-		return null;
+		return message;
 		
 	}
 	
@@ -346,13 +385,11 @@ public class Node extends UnicastRemoteObject implements ChordNodeInterface {
 	public boolean majorityAcknowledged() throws RemoteException {
 		
 		// count the number of yes (i.e. where message.isAcknowledged = true)
+		long count = queueACK.stream().filter(message -> message.isAcknowledged()).count();
+		
+		quorum = activenodesforfile.size()/2 + 1;
 		// check if it is the majority or not
-		// return the decision (true or false)
-
-						
-						
-						
-		return false;			// change this to the result of the vote
+		return count >= quorum;
 	}
 
 	@Override
@@ -366,6 +403,9 @@ public class Node extends UnicastRemoteObject implements ChordNodeInterface {
 	public void onReceivedVotersDecision(Message message) throws RemoteException {
 		
 		// release CS lock if voter initiator says he was denied access bcos he lacks majority votes
+		if(message.isAcknowledged()) {
+			WANTS_TO_ENTER_CS = false;
+		}
 		// otherwise lock is kept
 
 	}
@@ -374,6 +414,18 @@ public class Node extends UnicastRemoteObject implements ChordNodeInterface {
 	public void onReceivedUpdateOperation(Message message) throws RemoteException {
 		
 		// check the operation type: we expect a WRITE operation to do this. 
+		OperationType optype = message.getOptype();
+		
+		switch(optype) {
+		case WRITE: {
+			Operations op = new Operations(this, message, activenodesforfile);
+			op.performOperation();
+			releaseLocks();
+		}
+		break;
+
+		default: break;
+	}
 		// perform operation by using the Operations class 
 		// Release locks after this operation
 		
@@ -383,6 +435,21 @@ public class Node extends UnicastRemoteObject implements ChordNodeInterface {
 	public void multicastUpdateOrReadReleaseLockOperation(Message message) throws RemoteException {
 		
 		// check the operation type:
+		OperationType optype = message.getOptype();
+		
+		switch(optype) {
+		case WRITE: {
+			Operations op = new Operations(this, message, activenodesforfile);
+			op.multicastOperationToReplicas(message);
+		}
+		break;
+		case READ: {
+			Operations op = new Operations(this, message, activenodesforfile);
+			op.multicastReadReleaseLocks();
+		}
+		break;
+		default: break;
+		}
 		// if this is a write operation, multicast the update to the rest of the replicas (voters)
 		// otherwise if this is a READ operation multicast releaselocks to the replicas (voters)
 	}	
@@ -391,7 +458,18 @@ public class Node extends UnicastRemoteObject implements ChordNodeInterface {
 	public void multicastVotersDecision(Message message) throws RemoteException {	
 		
 		// multicast voters decision to the rest of the replicas (i.e activenodesforfile)
-
+		List<Message> activenodes = new ArrayList<Message>(this.activenodesforfile);
+		for(int i=0; i<activenodes.size(); i++) {
+			String stub = activenodes.get(i).getNodeID().toString();
+			Registry reg = LocateRegistry.getRegistry(activenodes.get(i).getNodeIP());
+			try {
+				ChordNodeInterface node = (ChordNodeInterface) reg.lookup(stub);
+				node.onReceivedVotersDecision(message);
+			} catch (NotBoundException e) {
+				e.printStackTrace();
+			}
+			
+		}
 
 	}
 

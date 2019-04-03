@@ -128,22 +128,23 @@ public class MutexProcess extends UnicastRemoteObject implements ProcessInterfac
 		Collections.shuffle(replicas);
 		
 		// multicast message to N/2 + 1 processes (random processes) - block until feedback is received
-		for(int i=0; i<replicas.size(); i++) {
-			String stub = replicas.get(i);
-
-			try {
-				ProcessInterface p = Util.registryHandle(stub);
-				queueACK.add(p.onMessageReceived(message));
-				
-			} catch (NotBoundException e) {
-
-				e.printStackTrace();
+		synchronized(queueACK) {
+			queueACK.clear();
+			for(int i=0; i<replicas.size(); i++) {
+				String stub = replicas.get(i);
+	
+				try {
+					ProcessInterface p = Util.registryHandle(stub);
+					queueACK.add(p.onMessageReceived(message));
+					
+				} catch (NotBoundException e) {
+	
+					e.printStackTrace();
+				}
 			}
 		}
 		
-		// do something with the acknowledgement you received from the voters - Idea: use the queueACK to collect GRANT/DENY messages and make sure queueACK is synchronized!!!
-		queueACK = Collections.synchronizedList(queueACK);
-		
+		// do something with the acknowledgement you received from the voters - Idea: use the queueACK to collect GRANT/DENY messages and make sure queueACK is synchronized!!!		
 		// compute election result - Idea call majorityAcknowledged()
 		
 		return majorityAcknowledged();	

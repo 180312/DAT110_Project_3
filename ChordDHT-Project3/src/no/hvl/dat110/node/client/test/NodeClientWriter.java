@@ -41,7 +41,17 @@ public class NodeClientWriter extends Thread {
 		// connect to an active chord node - can use the process defined in StaticTracker 
 		
 		// Compute the hash of the node's IP address
-		
+		Registry registry = Util.tryIPs();
+		// use the hash to retrieve the ChordNodeInterface remote object from the registry
+		String haship = Hash.hashOf(Util.activeIP).toString();
+		try {
+			ChordNodeInterface entryNode = (ChordNodeInterface) registry.lookup(haship);
+			FileManager fm = new FileManager(entryNode, StaticTracker.N);
+			this.succeed = fm.requestToReadFileFromAnyActiveNode(filename);
+		} catch (RemoteException | NotBoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		// use the hash to retrieve the ChordNodeInterface remote object from the registry
 		
 		// do: FileManager fm = new FileManager(ChordNodeInterface, StaticTracker.N);
