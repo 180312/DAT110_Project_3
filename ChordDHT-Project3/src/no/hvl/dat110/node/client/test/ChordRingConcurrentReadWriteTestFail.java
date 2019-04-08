@@ -87,7 +87,7 @@ class ChordRingConcurrentReadWriteTestFail {
 		
 		boolean result = r.isSucceed() && w.isSucceed();
 		
-		Assertions.assertTrue(result); 										// test must fail as this should return false
+		Assertions.assertFalse(result); 										// test must fail as this should return false
 
 	}
 

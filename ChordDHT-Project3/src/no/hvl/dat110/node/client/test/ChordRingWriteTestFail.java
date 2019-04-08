@@ -98,7 +98,7 @@ class ChordRingWriteTestFail {
 		p7.releaseLocks();
 		p8.releaseLocks();
 		p6.releaseLocks();
-		Assertions.assertTrue(w.isSucceed()); 									// test must fail as this should return false (should not get the majority vote)
+		Assertions.assertFalse(w.isSucceed()); 									// test must fail as this should return false (should not get the majority vote)
 		
 	}
 
