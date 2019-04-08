@@ -25,6 +25,7 @@ import java.util.Set;
 import no.hvl.dat110.node.Message;
 import no.hvl.dat110.node.OperationType;
 import no.hvl.dat110.node.Operations;
+import no.hvl.dat110.rpc.StaticTracker;
 import no.hvl.dat110.rpc.interfaces.ChordNodeInterface;
 import no.hvl.dat110.util.Hash;
 import no.hvl.dat110.util.Util;
@@ -92,6 +93,7 @@ public class FileManager extends Thread {
 		// generate the N replica keyids from the filename
 		// create replicas
 		// findsuccessors for each file replica and save the result (fileID) for each successor 
+		replicafiles = new BigInteger[nfiles];
 		createReplicaFiles(filename);
 		
 		Set<Message> messages = new HashSet<Message>();
@@ -130,36 +132,45 @@ public class FileManager extends Thread {
 		Set<Message> activeNodeMessages = requestActiveNodesForFile(filename);
 		List<Message> activenodes = new ArrayList<Message>(activeNodeMessages);
 		
+		// choose any available node
 		Message nodeMessage = activenodes.get(0);
 		
-		// choose any available node
-		Registry reg = LocateRegistry.getRegistry(nodeMessage.getNodeIP());
-		
 		// locate the registry and see if the node is still active by retrieving its remote object
+		Registry reg = LocateRegistry.getRegistry(StaticTracker.PORT);
+		
 		ChordNodeInterface node = (ChordNodeInterface) reg.lookup(nodeMessage.getNodeID().toString());
 		
 		// build the operation to be performed - Read and request for votes in existing active node message
-		Boolean request = node.requestReadOperation(nodeMessage);
 		
+		node.setActiveNodesForFile(activeNodeMessages);
+ 		Boolean request = node.requestReadOperation(nodeMessage);
+ 		
 		// set the active nodes holding replica files in the contact node (setActiveNodesForFile)
- 		node.setActiveNodesForFile(activeNodeMessages);
+ 		
+		// set the NodeIP in the message (replace ip with )
+ 		nodeMessage.setNodeIP(node.getNodeIP());
+ 		nodeMessage.setOptype(OperationType.READ);
+ 		
+ 		// send a request to a node and get the voters decision
+ 		// put the decision back in the message
+ 		nodeMessage.setAcknowledged(request);
+ 		
+ 		// multicast voters' decision to the rest of the nodes
+ 		node.multicastVotersDecision(nodeMessage);
  		
  		if(request) {
- 			node.multicastVotersDecision(nodeMessage);
  			node.acquireLock();
  			Operations op = new Operations(node, nodeMessage, activeNodeMessages);
  			op.performOperation();
  			node.multicastUpdateOrReadReleaseLockOperation(nodeMessage);
+ 			try {
+				sleep(2000);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
  			node.releaseLocks();
  		}
-		
-		// set the NodeIP in the message (replace ip with )
-		
-		// send a request to a node and get the voters decision
-		
-		// put the decision back in the message
-		
-		// multicast voters' decision to the rest of the nodes
 		
 		// if majority votes
 		
@@ -184,36 +195,45 @@ public class FileManager extends Thread {
 		Set<Message> activeNodeMessages = requestActiveNodesForFile(filename);
 		List<Message> activenodes = new ArrayList<Message>(activeNodeMessages);
 		
+		// choose any available node
 		Message nodeMessage = activenodes.get(0);
 		
-		// choose any available node
-		Registry reg = LocateRegistry.getRegistry(nodeMessage.getNodeIP());
-		
 		// locate the registry and see if the node is still active by retrieving its remote object
+		Registry reg = LocateRegistry.getRegistry(StaticTracker.PORT);
 		ChordNodeInterface node = (ChordNodeInterface) reg.lookup(nodeMessage.getNodeID().toString());
 		
 		// build the operation to be performed - Read and request for votes in existing active node message
+		node.setActiveNodesForFile(activeNodeMessages);
 		Boolean request = node.requestWriteOperation(nodeMessage);
 		
 		// set the active nodes holding replica files in the contact node (setActiveNodesForFile)
- 		node.setActiveNodesForFile(activeNodeMessages);
+ 		
+		// set the NodeIP in the message (replace ip with )
+ 		nodeMessage.setNodeIP(node.getNodeIP());
+ 		nodeMessage.setNewcontent(newcontent);
+ 		nodeMessage.setOptype(OperationType.WRITE);
+ 		
+ 		// send a request to a node and get the voters decision
+ 		// put the decision back in the message
+ 		nodeMessage.setAcknowledged(request);
+ 		
+ 		// multicast voters' decision to the rest of the nodes
+ 		node.multicastVotersDecision(nodeMessage);
  		
  		if(request) {
- 			node.multicastVotersDecision(nodeMessage);
  			node.acquireLock();
  			Operations op = new Operations(node, nodeMessage, activeNodeMessages);
  			op.performOperation();
+ 			
  			node.multicastUpdateOrReadReleaseLockOperation(nodeMessage);
+ 			try {
+				sleep(2000);
+			} catch (InterruptedException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
  			node.releaseLocks();
- 		}
- 		
-		// set the NodeIP in the message (replace ip with )
-		
-		// send a request to a node and get the voters decision
-		
-		// put the decision back in the message
-		
-		// multicast voters' decision to the rest of the nodes
+ 		}	
 		
 		// if majority votes
 		

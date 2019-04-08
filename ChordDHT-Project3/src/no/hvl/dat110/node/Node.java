@@ -289,10 +289,11 @@ public class Node extends UnicastRemoteObject implements ChordNodeInterface {
 		message.setOptype(OperationType.WRITE);
 
 		// wants to access resource - multicast clock + message to other processes
-		WANTS_TO_ENTER_CS = true;
-		boolean electionresult = multicastMessage(message);			// request for write permission from N/2 + 1 replicas (majority)
+		WANTS_TO_ENTER_CS = true;		
 		
-		return electionresult;
+		// request for write permission from N/2 + 1 replicas (majority)
+		
+		return multicastMessage(message);
 		
 	}
 
@@ -304,10 +305,11 @@ public class Node extends UnicastRemoteObject implements ChordNodeInterface {
 		message.setOptype(OperationType.READ);
 
 		// wants to access resource - multicast clock + message to other processes
-		WANTS_TO_ENTER_CS = true;
-		boolean electionresult = multicastMessage(message);				// request for read permission from N/2 + 1 replicas (majority)
+		WANTS_TO_ENTER_CS = true;		
+		
+		// request for read permission from N/2 + 1 replicas (majority)
 
-		return electionresult;
+		return multicastMessage(message);	
 	}	
 	
 	// multicast message to N/2 + 1 processes (random processes)
@@ -321,8 +323,8 @@ public class Node extends UnicastRemoteObject implements ChordNodeInterface {
 			queueACK.clear();
 			for(int i=0; i<activenodes.size(); i++) {
 				String stub = activenodes.get(i).getNodeID().toString();
-				Registry reg = LocateRegistry.getRegistry(activenodes.get(i).getNodeIP());
 				try {
+					Registry reg = Util.locateRegistry(activenodes.get(i).getNodeIP());
 					ChordNodeInterface node = (ChordNodeInterface) reg.lookup(stub);
 					queueACK.add(node.onMessageReceived(message));
 				} catch (NotBoundException e) {
@@ -459,10 +461,11 @@ public class Node extends UnicastRemoteObject implements ChordNodeInterface {
 		
 		// multicast voters decision to the rest of the replicas (i.e activenodesforfile)
 		List<Message> activenodes = new ArrayList<Message>(this.activenodesforfile);
+		
 		for(int i=0; i<activenodes.size(); i++) {
 			String stub = activenodes.get(i).getNodeID().toString();
-			Registry reg = LocateRegistry.getRegistry(activenodes.get(i).getNodeIP());
 			try {
+				Registry reg = Util.locateRegistry(activenodes.get(i).getNodeIP());
 				ChordNodeInterface node = (ChordNodeInterface) reg.lookup(stub);
 				node.onReceivedVotersDecision(message);
 			} catch (NotBoundException e) {

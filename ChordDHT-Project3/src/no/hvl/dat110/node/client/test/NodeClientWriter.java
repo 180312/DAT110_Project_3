@@ -47,7 +47,7 @@ public class NodeClientWriter extends Thread {
 		try {
 			ChordNodeInterface entryNode = (ChordNodeInterface) registry.lookup(haship);
 			FileManager fm = new FileManager(entryNode, StaticTracker.N);
-			this.succeed = fm.requestToReadFileFromAnyActiveNode(filename);
+			this.succeed = fm.requestWriteToFileFromAnyActiveNode(filename, content);
 		} catch (RemoteException | NotBoundException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
